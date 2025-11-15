@@ -1,98 +1,114 @@
 import OpenAI from "openai";
 import multiparty from "multiparty";
 import fs from "fs";
-import recyclingData from "../../recycling_data.json";   // <-- NEW: load your JSON file
+import path from "path";
 
 export const config = {
   api: { bodyParser: false }
 };
 
+// Correct path to recycling_data.json
+const recyclingData = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), "recycling_data.json"), "utf8")
+);
+
 export default async function handler(req, res) {
   const form = new multiparty.Form();
 
   form.parse(req, async (err, fields, files) => {
+    if (err) {
+      return res.status(500).json({ reply: "Form parsing error" });
+    }
+
     const userText = fields.text ? fields.text[0] : "";
     const imageFile = files.image ? files.image[0] : null;
 
+    // Init OpenAI client
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    let imageData = null;
+    let imageBase64 = null;
     if (imageFile) {
-      imageData = fs.readFileSync(imageFile.path).toString("base64");
+      imageBase64 = fs.readFileSync(imageFile.path).toString("base64");
     }
 
+    // Build system prompt
+    const classes = Object.keys(recyclingData).join(", ");
     const systemPrompt = `
-      You are a recycling expert AI. You classify items into specific waste categories.
-      You MUST respond with a JSON object in this format exactly:
+You are a recycling classification AI.
+Return ONLY valid JSON:
 
-      {
-        "predicted_class": "...",
-        "description": "Short explanation of what the item is"
-      }
+{
+  "predicted_class": "one of: ${classes}",
+  "description": "short explanation"
+}
+`;
 
-      The predicted_class MUST match one of these dataset classes exactly:
-      ${Object.keys(recyclingData).join(", ")}
-    `;
-
-    // Send request to OpenAI
+    // Build messages using new API format
     const messages = [
       { role: "system", content: systemPrompt }
     ];
 
     if (userText) {
-      messages.push({ role: "user", content: userText });
+      messages.push({
+        role: "user",
+        content: [{ type: "text", text: userText }]
+      });
     }
 
-    if (imageData) {
+    if (imageBase64) {
       messages.push({
         role: "user",
         content: [
-          { type: "input_text", text: "Here is an image." },
-          { type: "input_image", image_url: `data:image/jpeg;base64,${imageData}` }
+          { type: "text", text: "Here is an image." },
+          { type: "image", image: imageBase64 }
         ]
       });
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages
-    });
-
-    let aiResult = response.choices[0].message.content;
-
-    let parsed;
     try {
-      parsed = JSON.parse(aiResult);
-    } catch (err) {
-      // If OpenAI didn't return JSON, fall back safely
-      return res.json({
-        reply: "Error: Could not parse AI result.",
-        raw: aiResult
+      const response = await openai.responses.create({
+        model: "gpt-4.1-mini",
+        messages
       });
-    }
 
-    const predicted = parsed.predicted_class;
-    const recycleInfo = recyclingData[predicted];
+      const output = response.output[0].content[0].text;
 
-    if (!recycleInfo) {
-      return res.json({
-        reply: `I identified this item as "${predicted}", but it is not in the recycling dataset.`,
-        details: parsed
-      });
-    }
+      let parsed;
+      try {
+        parsed = JSON.parse(output);
+      } catch (e) {
+        return res.json({
+          reply: "AI returned invalid JSON.",
+          raw: output
+        });
+      }
 
-    // Build final reply
-    const finalReply = `
+      const predicted = parsed.predicted_class;
+      const info = recyclingData[predicted];
+
+      if (!info) {
+        return res.json({
+          reply: `Identified "${predicted}" but it is not in the recycling dataset.`,
+          details: parsed
+        });
+      }
+
+      const finalReply = `
 Item: ${predicted}
-Material: ${recycleInfo.material}
-Recyclable: ${recycleInfo.recyclable ? "Yes" : "No"}
-Instructions: ${recycleInfo.instructions}
+Material: ${info.material}
+Recyclable: ${info.recyclable ? "Yes" : "No"}
+Instructions: ${info.instructions}
 
 Description: ${parsed.description}
-    `;
+      `.trim();
 
-    res.json({ reply: finalReply.trim() });
+      return res.json({ reply: finalReply });
+
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ reply: "Server error", details: err.message });
+    }
   });
 }
