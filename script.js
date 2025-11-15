@@ -27,9 +27,7 @@ async function sendInput() {
       body: formData
     });
 
-    if (!res.ok) {
-      throw new Error(`Server responded with ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`Server responded with ${res.status}`);
 
     const data = await res.json();
     addMessage("AI", data.reply);
@@ -42,3 +40,4 @@ async function sendInput() {
   userText.value = "";
   imageUpload.value = "";
 }
+
