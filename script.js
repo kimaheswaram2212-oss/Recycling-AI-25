@@ -21,7 +21,7 @@ async function sendInput() {
   formData.append("text", text);
   if (file) formData.append("image", file);
 
-  const res = await fetch("https://your-vercel-project.vercel.app/api/analyze", {
+  const res = await fetch("https://recycling-ai-25.vercel.app/api/analyze", {
     method: "POST",
     body: formData
   });
