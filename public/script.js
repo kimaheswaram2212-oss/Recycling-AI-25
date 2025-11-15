@@ -17,14 +17,25 @@ async function sendInput() {
 
   addMessage("You", text || "(Image uploaded)");
 
-  const formData = new FormData();
-  formData.append("text", text);
-  if (file) formData.append("image", file);
+  let base64Image = null;
+
+  // Convert image to Base64 (if uploaded)
+  if (file) {
+    base64Image = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+  }
 
   try {
     const response = await fetch("/api/analyze", {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: text,
+        image: base64Image
+      }),
     });
 
     if (!response.ok) {
