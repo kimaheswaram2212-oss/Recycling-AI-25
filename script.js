@@ -22,24 +22,23 @@ async function sendInput() {
   if (file) formData.append("image", file);
 
   try {
-    const res = await fetch("https://recycling-ai-25.vercel.app/api/analyze", {
+    const res = await fetch("/api/analyze", {
       method: "POST",
       body: formData
     });
 
     if (!res.ok) {
-      addMessage("AI", `Server error: ${res.status} ${res.statusText}`);
-      return;
+      throw new Error(`Server responded with ${res.status}`);
     }
 
     const data = await res.json();
-    addMessage("AI", data.reply || "No response received.");
+    addMessage("AI", data.reply);
+
   } catch (err) {
-    addMessage("AI", "Unable to reach server. Check console.");
     console.error("Fetch error:", err);
+    addMessage("AI", "Unable to reach server. Check console.");
   }
 
   userText.value = "";
   imageUpload.value = "";
 }
-
