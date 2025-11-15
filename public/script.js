@@ -1,6 +1,5 @@
 const chatBox = document.getElementById("chat-box");
 const userText = document.getElementById("user-text");
-const imageUpload = document.getElementById("image-upload");
 
 function addMessage(sender, message) {
   const div = document.createElement("div");
@@ -11,30 +10,16 @@ function addMessage(sender, message) {
 
 async function sendInput() {
   const text = userText.value.trim();
-  const file = imageUpload.files[0];
+  if (!text) return;
 
-  if (!text && !file) return;
-
-  addMessage("You", text || "(Image uploaded)");
-
-  let base64Image = null;
-
-  // Convert image to Base64 (if uploaded)
-  if (file) {
-    base64Image = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.readAsDataURL(file);
-    });
-  }
+  addMessage("You", text);
 
   try {
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        prompt: text,
-        image: base64Image
+        prompt: text
       }),
     });
 
@@ -43,7 +28,9 @@ async function sendInput() {
     }
 
     const data = await response.json();
-    addMessage("AI", data.reply);
+
+    // backend returns: { response: message }
+    addMessage("AI", data.response);
 
   } catch (error) {
     console.error("Fetch error:", error);
@@ -51,5 +38,4 @@ async function sendInput() {
   }
 
   userText.value = "";
-  imageUpload.value = "";
 }
