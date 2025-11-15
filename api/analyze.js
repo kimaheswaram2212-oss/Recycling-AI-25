@@ -1,8 +1,8 @@
-import { Groq } from "groq-sdk";
+import Groq from "groq-sdk";
 
 export const config = {
   api: {
-    bodyParser: true, // Parse JSON normally
+    bodyParser: true,
   },
 };
 
@@ -22,8 +22,9 @@ export default async function handler(req, res) {
       apiKey: process.env.GROQ_API_KEY,
     });
 
+    // ✅ UPDATED MODEL — this is valid
     const response = await client.chat.completions.create({
-      model: "llama3-8b-8192-chat",
+      model: "llama-3.2-11b-text-preview",
       messages: [
         { role: "system", content: "You are a helpful recycling assistant." },
         { role: "user", content: prompt }
