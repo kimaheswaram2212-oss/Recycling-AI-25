@@ -11,91 +11,94 @@ export const config = {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const recyclingDataPath = path.join(__dirname, "..", "recycling_data.json");
+// IMPORTANT: file must be inside /public for Vercel
+const recyclingDataPath = path.join(process.cwd(), "public", "recycling_data.json");
 const recyclingData = JSON.parse(fs.readFileSync(recyclingDataPath, "utf8"));
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   const form = new multiparty.Form();
 
   form.parse(req, async (err, fields, files) => {
-    if (err) return res.json({ reply: "Form parsing error" });
+    if (err) {
+      console.error("Form error:", err);
+      return res.json({ reply: "Form parsing error." });
+    }
 
     const userText = fields.text ? fields.text[0] : "";
     const imageFile = files.image ? files.image[0] : null;
 
-    // Read image file (if any)
-    let imageBase64 = null;
+    let imageData = null;
     if (imageFile) {
-      const imgBuffer = fs.readFileSync(imageFile.path);
-      imageBase64 = imgBuffer.toString("base64");
+      imageData = fs.readFileSync(imageFile.path).toString("base64");
     }
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    // Build input for Responses API
-    const input = [];
+    const systemPrompt = `
+      You are a recycling expert. Reply ONLY with a JSON object:
+      {
+        "predicted_class": "...",
+        "description": "short explanation"
+      }
+      Allowed classes:
+      ${Object.keys(recyclingData).join(", ")}
+    `;
 
-    // System instructions as plain text
-    input.push(`
-You are a recycling expert AI. Output ONLY a JSON object:
+    let messages = [{ role: "system", content: systemPrompt }];
 
-{
-  "predicted_class": "...",
-  "description": "Short explanation"
-}
+    if (userText) {
+      messages.push({ role: "user", content: userText });
+    }
 
-Classes you can choose from:
-${Object.keys(recyclingData).join(", ")}
-    `);
-
-    if (userText) input.push(userText);
-
-    if (imageBase64) {
-      input.push({
-        image: {
-          base64: imageBase64
-        }
+    if (imageData) {
+      messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: "Here is an image." },
+          { type: "input_image", image_url: `data:image/jpeg;base64,${imageData}` }
+        ]
       });
     }
 
-    // Call OpenAI Responses API
-    const response = await openai.responses.create({
-      model: "gpt-4o-mini",
-      input
-    });
-
-    const aiText = response.output_text;
-
-    let parsed;
     try {
-      parsed = JSON.parse(aiText);
-    } catch (e) {
-      return res.json({ reply: "AI returned invalid JSON.", raw: aiText });
-    }
-
-    const predicted = parsed.predicted_class;
-    const recycleInfo = recyclingData[predicted];
-
-    if (!recycleInfo) {
-      return res.json({
-        reply: `AI predicted "${predicted}", but that class does not exist.`,
-        details: parsed
+      const aiResponse = await openai.responses.create({
+        model: "gpt-4o-mini",
+        input: messages
       });
-    }
 
-    const finalReply = `
+      const aiText = aiResponse.output[0].content[0].text;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(aiText);
+      } catch (e) {
+        return res.json({ reply: "AI returned invalid JSON.", raw: aiText });
+      }
+
+      const predicted = parsed.predicted_class;
+      const info = recyclingData[predicted];
+
+      if (!info) {
+        return res.json({
+          reply: `AI predicted "${predicted}", but that class does not exist.`,
+          details: parsed
+        });
+      }
+
+      const finalReply = `
 Item: ${predicted}
-Material: ${recycleInfo.material}
-Recyclable: ${recycleInfo.recyclable ? "Yes" : "No"}
-Instructions: ${recycleInfo.instructions}
+Material: ${info.material}
+Recyclable: ${info.recyclable ? "Yes" : "No"}
+Instructions: ${info.instructions}
 
 Description: ${parsed.description}
-    `.trim();
+      `.trim();
 
-    res.json({ reply: finalReply });
+      res.json({ reply: finalReply });
+
+    } catch (err) {
+      console.error("OpenAI error:", err);
+      res.json({ reply: "OpenAI API error." });
+    }
   });
 }
-
-
