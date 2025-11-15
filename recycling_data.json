@@ -1,0 +1,142 @@
+{
+  "Plastic water bottles": {
+    "material": "Plastic (PET #1)",
+    "recyclable": true,
+    "instructions": "Empty and rinse. Remove caps if required by local recycling. Place in plastic recycling."
+  },
+  "Plastic soda bottles": {
+    "material": "Plastic (PET #1)",
+    "recyclable": true,
+    "instructions": "Rinse. Crush to save space. Recycle with plastics."
+  },
+  "Plastic detergent bottles": {
+    "material": "Plastic (HDPE #2)",
+    "recyclable": true,
+    "instructions": "Rinse well. Remove pump tops. Recycle with household plastics."
+  },
+  "Plastic shopping bags": {
+    "material": "Plastic film (LDPE #4)",
+    "recyclable": "store-dropoff-only",
+    "instructions": "Do NOT place in curbside bins. Bring to grocery store drop-off bins."
+  },
+  "Plastic trash bags": {
+    "material": "Plastic film (LDPE #4)",
+    "recyclable": false,
+    "instructions": "Not recyclable. Dispose in general waste."
+  },
+  "Plastic food containers": {
+    "material": "Plastic (varies: PET #1, PP #5, PS #6)",
+    "recyclable": "depends",
+    "instructions": "Rinse. Check local rules for #5 containers. Foam (#6) often not accepted."
+  },
+  "Plastic disposable cutlery": {
+    "material": "Plastic (PS #6 or PP #5)",
+    "recyclable": false,
+    "instructions": "Not accepted in most recycling programs. Dispose in trash."
+  },
+  "Plastic straws": {
+    "material": "Plastic (PP #5)",
+    "recyclable": false,
+    "instructions": "Too small for recycling machinery. Throw away as general waste."
+  },
+  "Plastic cup lids": {
+    "material": "Plastic (PET #1 or PP #5)",
+    "recyclable": "depends",
+    "instructions": "Check local rules. Rinse before recycling."
+  },
+
+  "Newspaper": {
+    "material": "Paper",
+    "recyclable": true,
+    "instructions": "Bundle or place loosely in paper recycling."
+  },
+  "Office paper": {
+    "material": "Paper",
+    "recyclable": true,
+    "instructions": "Recycle clean paper. Remove staples if required."
+  },
+  "Magazines": {
+    "material": "Glossy paper",
+    "recyclable": true,
+    "instructions": "Remove plastic wrap. Place in mixed-paper recycling."
+  },
+  "Cardboard boxes": {
+    "material": "Cardboard",
+    "recyclable": true,
+    "instructions": "Flatten boxes. Remove tape and labels if possible."
+  },
+  "Cardboard packaging": {
+    "material": "Cardboard",
+    "recyclable": true,
+    "instructions": "Flatten. Keep clean and dry."
+  },
+
+  "Glass beverage bottles": {
+    "material": "Glass",
+    "recyclable": true,
+    "instructions": "Rinse. Remove caps. Do not break. Recycle by color if required."
+  },
+  "Glass food jars": {
+    "material": "Glass",
+    "recyclable": true,
+    "instructions": "Rinse. Remove lids. Recycle."
+  },
+  "Glass cosmetic containers": {
+    "material": "Glass",
+    "recyclable": true,
+    "instructions": "Rinse. Remove pumps. Recycle clear glass."
+  },
+
+  "Aluminum soda cans": {
+    "material": "Aluminum",
+    "recyclable": true,
+    "instructions": "Rinse lightly. Crush if needed. Recycle."
+  },
+  "Aluminum food cans": {
+    "material": "Aluminum",
+    "recyclable": true,
+    "instructions": "Rinse. Remove labels if required. Recycle."
+  },
+  "Steel food cans": {
+    "material": "Steel",
+    "recyclable": true,
+    "instructions": "Rinse. Place in metal recycling."
+  },
+  "Aerosol cans": {
+    "material": "Aluminum/Steel",
+    "recyclable": "depends",
+    "instructions": "Must be completely empty. Check local rules for aerosols."
+  },
+
+  "Food waste": {
+    "material": "Organic waste",
+    "recyclable": false,
+    "instructions": "Compost if possible. Otherwise dispose as general waste."
+  },
+  "Eggshells": {
+    "material": "Organic waste",
+    "recyclable": false,
+    "instructions": "Compostable. Do not recycle."
+  },
+  "Coffee grounds": {
+    "material": "Organic waste",
+    "recyclable": false,
+    "instructions": "Compost if available."
+  },
+  "Tea bags": {
+    "material": "Organic waste / Mixed materials",
+    "recyclable": false,
+    "instructions": "Compost if 100% paper. If plastic mesh, dispose in trash."
+  },
+
+  "Clothing": {
+    "material": "Textiles",
+    "recyclable": "special-dropoff",
+    "instructions": "Do not place in curbside bins. Donate or bring to textile recycling."
+  },
+  "Shoes": {
+    "material": "Textiles / Rubber",
+    "recyclable": "special-dropoff",
+    "instructions": "Reuse/donate if possible. Many cities have shoe recycling programs."
+  }
+}
