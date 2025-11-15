@@ -11,7 +11,7 @@ export const config = {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// IMPORTANT: file must be inside /public for Vercel
+// MUST be inside public on Vercel
 const recyclingDataPath = path.join(process.cwd(), "public", "recycling_data.json");
 const recyclingData = JSON.parse(fs.readFileSync(recyclingDataPath, "utf8"));
 
@@ -27,51 +27,63 @@ export default async function handler(req, res) {
     const userText = fields.text ? fields.text[0] : "";
     const imageFile = files.image ? files.image[0] : null;
 
-    let imageData = null;
+    let imageBase64 = null;
     if (imageFile) {
-      imageData = fs.readFileSync(imageFile.path).toString("base64");
+      const fileData = fs.readFileSync(imageFile.path);
+      const ext = path.extname(imageFile.originalFilename || "").toLowerCase();
+      const mime =
+        ext === ".png"
+          ? "image/png"
+          : ext === ".webp"
+          ? "image/webp"
+          : "image/jpeg";
+      imageBase64 = `data:${mime};base64,${fileData.toString("base64")}`;
     }
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const systemPrompt = `
-      You are a recycling expert. Reply ONLY with a JSON object:
+    const messages = [
       {
-        "predicted_class": "...",
-        "description": "short explanation"
+        role: "system",
+        content: `
+          You are a recycling expert. Reply ONLY with a JSON object:
+          {
+            "predicted_class": "...",
+            "description": "short explanation"
+          }
+          Allowed classes:
+          ${Object.keys(recyclingData).join(", ")}
+        `
       }
-      Allowed classes:
-      ${Object.keys(recyclingData).join(", ")}
-    `;
-
-    let messages = [{ role: "system", content: systemPrompt }];
+    ];
 
     if (userText) {
       messages.push({ role: "user", content: userText });
     }
 
-    if (imageData) {
+    if (imageBase64) {
       messages.push({
         role: "user",
         content: [
-          { type: "text", text: "Here is an image." },
-          { type: "input_image", image_url: `data:image/jpeg;base64,${imageData}` }
+          { type: "text", text: "Analyze this image." },
+          { type: "input_image", image_url: imageBase64 }
         ]
       });
     }
 
     try {
-      const aiResponse = await openai.responses.create({
-        model: "gpt-4o-mini",
-        input: messages
+      // IMPORTANT: gpt-4o (NOT gpt-4o-mini)
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages
       });
 
-      const aiText = aiResponse.output[0].content[0].text;
+      const aiText = completion.choices[0].message.content;
 
       let parsed;
       try {
         parsed = JSON.parse(aiText);
-      } catch (e) {
+      } catch {
         return res.json({ reply: "AI returned invalid JSON.", raw: aiText });
       }
 
@@ -94,11 +106,11 @@ Instructions: ${info.instructions}
 Description: ${parsed.description}
       `.trim();
 
-      res.json({ reply: finalReply });
-
+      return res.json({ reply: finalReply });
     } catch (err) {
       console.error("OpenAI error:", err);
-      res.json({ reply: "OpenAI API error." });
+      return res.json({ reply: "OpenAI API error." });
     }
   });
 }
+
