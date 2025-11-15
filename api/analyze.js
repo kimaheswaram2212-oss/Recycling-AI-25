@@ -8,75 +8,67 @@ export const config = {
   api: { bodyParser: false }
 };
 
-// Fix recycling_data.json path on Vercel
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const recyclingDataPath = path.join(__dirname, "..", "recycling_data.json");
 const recyclingData = JSON.parse(fs.readFileSync(recyclingDataPath, "utf8"));
 
-export default async function handler(req, res) {
+export default function handler(req, res) {
   const form = new multiparty.Form();
 
   form.parse(req, async (err, fields, files) => {
-    console.log("FIELDS:", fields);
-    console.log("FILES:", files);
     if (err) return res.json({ reply: "Form parsing error" });
 
     const userText = fields.text ? fields.text[0] : "";
     const imageFile = files.image ? files.image[0] : null;
 
+    // Read image file (if any)
+    let imageBase64 = null;
+    if (imageFile) {
+      const imgBuffer = fs.readFileSync(imageFile.path);
+      imageBase64 = imgBuffer.toString("base64");
+    }
+
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    // Read image (if provided)
-    let imageData = null;
-    if (imageFile) {
-      imageData = fs.readFileSync(imageFile.path).toString("base64");
-    }
+    // Build input for Responses API
+    const input = [];
 
-    // System prompt
-    const systemPrompt = `
-    You are a recycling expert AI. Output ONLY a JSON object:
+    // System instructions as plain text
+    input.push(`
+You are a recycling expert AI. Output ONLY a JSON object:
 
-    {
-      "predicted_class": "...",
-      "description": "Short explanation"
-    }
+{
+  "predicted_class": "...",
+  "description": "Short explanation"
+}
 
-    Use ONLY one of these classes:
-    ${Object.keys(recyclingData).join(", ")}
-    `;
+Classes you can choose from:
+${Object.keys(recyclingData).join(", ")}
+    `);
 
-    // Build OpenAI input
-    let messages = [
-      { role: "system", content: systemPrompt }
-    ];
+    if (userText) input.push(userText);
 
-    if (userText) {
-      messages.push({ role: "user", content: userText });
-    }
-
-    if (imageData) {
-      messages.push({
-        role: "user",
-        content: [
-          { type: "text", text: "Here is an image." },
-          { type: "input_image", image_url: `data:image/jpeg;base64,${imageData}` }
-        ]
+    if (imageBase64) {
+      input.push({
+        image: {
+          base64: imageBase64
+        }
       });
     }
 
-    // NEW API FORMAT
+    // Call OpenAI Responses API
     const response = await openai.responses.create({
       model: "gpt-4o-mini",
-      input: messages
+      input
     });
 
-    const aiText = response.output[0].content[0].text;
-    let parsed;
+    const aiText = response.output_text;
 
+    let parsed;
     try {
       parsed = JSON.parse(aiText);
     } catch (e) {
@@ -88,7 +80,7 @@ export default async function handler(req, res) {
 
     if (!recycleInfo) {
       return res.json({
-        reply: `AI predicted: "${predicted}" but that class does not exist.`,
+        reply: `AI predicted "${predicted}", but that class does not exist.`,
         details: parsed
       });
     }
@@ -105,4 +97,5 @@ Description: ${parsed.description}
     res.json({ reply: finalReply });
   });
 }
+
 
