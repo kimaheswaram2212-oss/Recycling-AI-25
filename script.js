@@ -1,4 +1,4 @@
-const API_URL = "https://recycling-chat-bot.vercel.app/api/analyze";
+const API_URL = "recycling-ai-25.vercel.app";
 
 const chatBox = document.getElementById("chat-box");
 const userText = document.getElementById("user-text");
