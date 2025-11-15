@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {},
   "dependencies": {
-    "openai": "^4.52.0",
-    "multiparty": "^4.2.2"
+    "groq-sdk": "^0.35.0",
+    "multiparty": "^4.2.2",
+    "openai": "^4.52.0"
   }
 }
-
