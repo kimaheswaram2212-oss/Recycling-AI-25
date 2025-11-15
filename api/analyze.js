@@ -19,6 +19,8 @@ export default async function handler(req, res) {
   const form = new multiparty.Form();
 
   form.parse(req, async (err, fields, files) => {
+    console.log("FIELDS:", fields);
+    console.log("FILES:", files);
     if (err) return res.json({ reply: "Form parsing error" });
 
     const userText = fields.text ? fields.text[0] : "";
