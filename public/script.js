@@ -2,8 +2,6 @@ const chatBox = document.getElementById("chat-box");
 const userText = document.getElementById("user-text");
 const imageUpload = document.getElementById("image-upload");
 
-const API_URL = "https://recycling-ai-25.vercel.app/api/analyze";
-
 function addMessage(sender, message) {
   const div = document.createElement("div");
   div.innerHTML = `<strong>${sender}:</strong> ${message}`;
@@ -24,24 +22,23 @@ async function sendInput() {
   if (file) formData.append("image", file);
 
   try {
-    const res = await fetch(API_URL, {
+    const response = await fetch("/api/analyze", {
       method: "POST",
-      body: formData
+      body: formData,
     });
 
-    if (!res.ok) {
-      throw new Error(`Server responded with ${res.status}`);
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
     }
 
-    const data = await res.json();
+    const data = await response.json();
     addMessage("AI", data.reply);
 
-  } catch (err) {
-    console.error("Fetch error:", err);
-    addMessage("AI", "Unable to reach server. Check console.");
+  } catch (error) {
+    console.error("Fetch error:", error);
+    addMessage("AI", "Server unreachable. Check Vercel logs.");
   }
 
   userText.value = "";
   imageUpload.value = "";
 }
-
