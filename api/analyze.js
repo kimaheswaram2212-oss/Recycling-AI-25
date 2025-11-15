@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import Groq from "groq-sdk";
 import multiparty from "multiparty";
 import fs from "fs";
 import path from "path";
@@ -11,7 +11,7 @@ export const config = {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// MUST be inside public on Vercel
+// recycling_data.json MUST be inside /public on Vercel
 const recyclingDataPath = path.join(process.cwd(), "public", "recycling_data.json");
 const recyclingData = JSON.parse(fs.readFileSync(recyclingDataPath, "utf8"));
 
@@ -27,55 +27,41 @@ export default async function handler(req, res) {
     const userText = fields.text ? fields.text[0] : "";
     const imageFile = files.image ? files.image[0] : null;
 
-    let imageBase64 = null;
+    // We ignore the image, since Groq cannot read images
     if (imageFile) {
-      const fileData = fs.readFileSync(imageFile.path);
-      const ext = path.extname(imageFile.originalFilename || "").toLowerCase();
-      const mime =
-        ext === ".png"
-          ? "image/png"
-          : ext === ".webp"
-          ? "image/webp"
-          : "image/jpeg";
-      imageBase64 = `data:${mime};base64,${fileData.toString("base64")}`;
+      console.log("Image uploaded but Groq cannot process images. Ignoring.");
     }
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const messages = [
-      {
-        role: "system",
-        content: `
-          You are a recycling expert. Reply ONLY with a JSON object:
-          {
-            "predicted_class": "...",
-            "description": "short explanation"
-          }
-          Allowed classes:
-          ${Object.keys(recyclingData).join(", ")}
-        `
-      }
-    ];
-
-    if (userText) {
-      messages.push({ role: "user", content: userText });
-    }
-
-    if (imageBase64) {
-      messages.push({
-        role: "user",
-        content: [
-          { type: "text", text: "Analyze this image." },
-          { type: "input_image", image_url: imageBase64 }
-        ]
+    if (!userText) {
+      return res.json({
+        reply: "Groq (free model) cannot analyze images. Please enter text describing the item."
       });
     }
 
+    // Build Groq client
+    const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY
+    });
+
+    const systemPrompt = `
+      You are a recycling expert. Reply ONLY with a JSON object:
+      {
+        "predicted_class": "...",
+        "description": "short explanation"
+      }
+      Allowed classes:
+      ${Object.keys(recyclingData).join(", ")}
+    `;
+
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userText }
+    ];
+
     try {
-      // IMPORTANT: gpt-4o (NOT gpt-4o-mini)
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages
+      const completion = await groq.chat.completions.create({
+        model: "llama-3.1-70b-versatile",
+        messages: messages
       });
 
       const aiText = completion.choices[0].message.content;
@@ -83,7 +69,7 @@ export default async function handler(req, res) {
       let parsed;
       try {
         parsed = JSON.parse(aiText);
-      } catch {
+      } catch (e) {
         return res.json({ reply: "AI returned invalid JSON.", raw: aiText });
       }
 
@@ -106,11 +92,11 @@ Instructions: ${info.instructions}
 Description: ${parsed.description}
       `.trim();
 
-      return res.json({ reply: finalReply });
+      res.json({ reply: finalReply });
+
     } catch (err) {
-      console.error("OpenAI error:", err);
-      return res.json({ reply: "OpenAI API error." });
+      console.error("Groq error:", err);
+      res.json({ reply: "Groq API error." });
     }
   });
 }
-
