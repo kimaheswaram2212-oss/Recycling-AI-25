@@ -1,114 +1,118 @@
 import OpenAI from "openai";
 import multiparty from "multiparty";
 import fs from "fs";
-import path from "path";
+
+// Load recycling dataset safely (works on Vercel)
+const recyclingData = JSON.parse(
+  fs.readFileSync("./recycling_data.json", "utf8")
+);
 
 export const config = {
   api: { bodyParser: false }
 };
-
-// Correct path to recycling_data.json
-const recyclingData = JSON.parse(
-  fs.readFileSync(path.join(process.cwd(), "recycling_data.json"), "utf8")
-);
 
 export default async function handler(req, res) {
   const form = new multiparty.Form();
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      return res.status(500).json({ reply: "Form parsing error" });
+      return res.status(400).json({ reply: "Form parsing error" });
     }
 
     const userText = fields.text ? fields.text[0] : "";
     const imageFile = files.image ? files.image[0] : null;
+
+    let imageData = null;
+    if (imageFile) {
+      try {
+        imageData = fs.readFileSync(imageFile.path).toString("base64");
+      } catch (e) {
+        return res.json({ reply: "Failed to read uploaded image file." });
+      }
+    }
 
     // Init OpenAI client
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    let imageBase64 = null;
-    if (imageFile) {
-      imageBase64 = fs.readFileSync(imageFile.path).toString("base64");
-    }
-
-    // Build system prompt
-    const classes = Object.keys(recyclingData).join(", ");
+    // System prompt with valid categories
     const systemPrompt = `
-You are a recycling classification AI.
-Return ONLY valid JSON:
+      You are a recycling expert AI. You classify items into specific waste categories.
 
-{
-  "predicted_class": "one of: ${classes}",
-  "description": "short explanation"
-}
-`;
+      You MUST respond with ONLY a JSON object in this format:
 
-    // Build messages using new API format
+      {
+        "predicted_class": "class name",
+        "description": "short explanation of what the item is"
+      }
+
+      The predicted_class MUST match exactly one of these dataset categories:
+      ${Object.keys(recyclingData).join(", ")}
+    `;
+
+    // Build messages array
     const messages = [
       { role: "system", content: systemPrompt }
     ];
 
     if (userText) {
-      messages.push({
-        role: "user",
-        content: [{ type: "text", text: userText }]
-      });
+      messages.push({ role: "user", content: userText });
     }
 
-    if (imageBase64) {
+    if (imageData) {
       messages.push({
         role: "user",
         content: [
-          { type: "text", text: "Here is an image." },
-          { type: "image", image: imageBase64 }
+          { type: "input_text", text: "Here is an image." },
+          { type: "input_image", image_url: `data:image/jpeg;base64,${imageData}` }
         ]
       });
     }
 
+    let aiResult;
     try {
-      const response = await openai.responses.create({
-        model: "gpt-4.1-mini",
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
         messages
       });
 
-      const output = response.output[0].content[0].text;
+      aiResult = response.choices[0].message.content;
+    } catch (error) {
+      return res.status(500).json({ reply: "OpenAI request failed", error });
+    }
 
-      let parsed;
-      try {
-        parsed = JSON.parse(output);
-      } catch (e) {
-        return res.json({
-          reply: "AI returned invalid JSON.",
-          raw: output
-        });
-      }
+    // Parse JSON output
+    let parsed;
+    try {
+      parsed = JSON.parse(aiResult);
+    } catch (e) {
+      return res.json({
+        reply: "Error: AI did not return valid JSON.",
+        raw: aiResult
+      });
+    }
 
-      const predicted = parsed.predicted_class;
-      const info = recyclingData[predicted];
+    const predicted = parsed.predicted_class;
+    const recycleInfo = recyclingData[predicted];
 
-      if (!info) {
-        return res.json({
-          reply: `Identified "${predicted}" but it is not in the recycling dataset.`,
-          details: parsed
-        });
-      }
+    if (!recycleInfo) {
+      return res.json({
+        reply: `AI predicted "${predicted}", but it is not in the recycling dataset.`,
+        details: parsed
+      });
+    }
 
-      const finalReply = `
+    // Build reply message
+    const finalReply = `
 Item: ${predicted}
-Material: ${info.material}
-Recyclable: ${info.recyclable ? "Yes" : "No"}
-Instructions: ${info.instructions}
+Material: ${recycleInfo.material}
+Recyclable: ${recycleInfo.recyclable ? "Yes" : "No"}
+Instructions: ${recycleInfo.instructions}
 
 Description: ${parsed.description}
-      `.trim();
+    `.trim();
 
-      return res.json({ reply: finalReply });
-
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ reply: "Server error", details: err.message });
-    }
+    return res.json({ reply: finalReply });
   });
 }
