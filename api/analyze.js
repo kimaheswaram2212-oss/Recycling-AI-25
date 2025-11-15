@@ -1,58 +1,54 @@
 import OpenAI from "openai";
 import multiparty from "multiparty";
 import fs from "fs";
-
-// Load recycling dataset safely (works on Vercel)
-const recyclingData = JSON.parse(
-  fs.readFileSync("./recycling_data.json", "utf8")
-);
+import path from "path";
+import { fileURLToPath } from "url";
 
 export const config = {
   api: { bodyParser: false }
 };
 
+// Fix recycling_data.json path on Vercel
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const recyclingDataPath = path.join(__dirname, "..", "recycling_data.json");
+const recyclingData = JSON.parse(fs.readFileSync(recyclingDataPath, "utf8"));
+
 export default async function handler(req, res) {
   const form = new multiparty.Form();
 
   form.parse(req, async (err, fields, files) => {
-    if (err) {
-      return res.status(400).json({ reply: "Form parsing error" });
-    }
+    if (err) return res.json({ reply: "Form parsing error" });
 
     const userText = fields.text ? fields.text[0] : "";
     const imageFile = files.image ? files.image[0] : null;
 
-    let imageData = null;
-    if (imageFile) {
-      try {
-        imageData = fs.readFileSync(imageFile.path).toString("base64");
-      } catch (e) {
-        return res.json({ reply: "Failed to read uploaded image file." });
-      }
-    }
-
-    // Init OpenAI client
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    // System prompt with valid categories
+    // Read image (if provided)
+    let imageData = null;
+    if (imageFile) {
+      imageData = fs.readFileSync(imageFile.path).toString("base64");
+    }
+
+    // System prompt
     const systemPrompt = `
-      You are a recycling expert AI. You classify items into specific waste categories.
+    You are a recycling expert AI. Output ONLY a JSON object:
 
-      You MUST respond with ONLY a JSON object in this format:
+    {
+      "predicted_class": "...",
+      "description": "Short explanation"
+    }
 
-      {
-        "predicted_class": "class name",
-        "description": "short explanation of what the item is"
-      }
-
-      The predicted_class MUST match exactly one of these dataset categories:
-      ${Object.keys(recyclingData).join(", ")}
+    Use ONLY one of these classes:
+    ${Object.keys(recyclingData).join(", ")}
     `;
 
-    // Build messages array
-    const messages = [
+    // Build OpenAI input
+    let messages = [
       { role: "system", content: systemPrompt }
     ];
 
@@ -64,33 +60,25 @@ export default async function handler(req, res) {
       messages.push({
         role: "user",
         content: [
-          { type: "input_text", text: "Here is an image." },
+          { type: "text", text: "Here is an image." },
           { type: "input_image", image_url: `data:image/jpeg;base64,${imageData}` }
         ]
       });
     }
 
-    let aiResult;
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages
-      });
+    // NEW API FORMAT
+    const response = await openai.responses.create({
+      model: "gpt-4o-mini",
+      input: messages
+    });
 
-      aiResult = response.choices[0].message.content;
-    } catch (error) {
-      return res.status(500).json({ reply: "OpenAI request failed", error });
-    }
-
-    // Parse JSON output
+    const aiText = response.output[0].content[0].text;
     let parsed;
+
     try {
-      parsed = JSON.parse(aiResult);
+      parsed = JSON.parse(aiText);
     } catch (e) {
-      return res.json({
-        reply: "Error: AI did not return valid JSON.",
-        raw: aiResult
-      });
+      return res.json({ reply: "AI returned invalid JSON.", raw: aiText });
     }
 
     const predicted = parsed.predicted_class;
@@ -98,12 +86,11 @@ export default async function handler(req, res) {
 
     if (!recycleInfo) {
       return res.json({
-        reply: `AI predicted "${predicted}", but it is not in the recycling dataset.`,
+        reply: `AI predicted: "${predicted}" but that class does not exist.`,
         details: parsed
       });
     }
 
-    // Build reply message
     const finalReply = `
 Item: ${predicted}
 Material: ${recycleInfo.material}
@@ -113,6 +100,7 @@ Instructions: ${recycleInfo.instructions}
 Description: ${parsed.description}
     `.trim();
 
-    return res.json({ reply: finalReply });
+    res.json({ reply: finalReply });
   });
 }
+
